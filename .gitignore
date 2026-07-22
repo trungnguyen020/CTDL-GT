@@ -1,0 +1,6 @@
+# CMake build output
+/build/
+
+# Runtime-generated files
+/*.db
+/imgui.ini
