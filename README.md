@@ -22,7 +22,7 @@ build lần đầu — không cần vào từng trang web để tải thủ côn
 ## Bước 2: Clone project về máy
 
 ```bash
-git clone <link-github-cua-nhom>
+git clone [<link-github-cua-nhom>](https://github.com/trungnguyen020/CTDL-GT.git)
 cd QuanLyDiem
 ```
 
