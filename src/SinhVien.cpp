@@ -2,7 +2,7 @@
 
 // ============================================================
 // Tính điểm tổng kết cho 1 môn học
-// Công thức mẫu: 40% giữa kỳ + 60% cuối kỳ (có thể chỉnh theo quy chế thật)
+// Công thức mẫu: 30% giữa kỳ + 70% cuối kỳ (có thể chỉnh theo quy chế thật)
 // ============================================================
 float tinhDiemTongKet(const MonHoc& mon) {
     return mon.diemGiuaKy * 0.4f + mon.diemCuoiKy * 0.6f;
@@ -30,7 +30,7 @@ float tinhDiemTrungBinh(const SinhVien& sv) {
 // (Nhóm có thể chỉnh lại quy tắc này cho đúng với quy chế thật của trường)
 // ============================================================
 bool xetKetQua(const SinhVien& sv) {
-    if (sv.diemTB < 4.0f) {
+    if (sv.diemTB < 5.0f) {
         return false;
     }
 
@@ -40,6 +40,31 @@ bool xetKetQua(const SinhVien& sv) {
         }
     }
     return true;
+}
+
+// ============================================================
+// Xét đậu/rớt cho MỘT môn học riêng lẻ (quy tắc mẫu: >= 4.0 là đậu)
+// ============================================================
+bool monHocDat(const MonHoc& mon) {
+    return mon.diemTongKet >= 4.0f;
+}
+
+// ============================================================
+// Đếm số môn đã đậu của 1 sinh viên
+// ============================================================
+int demSoMonDat(const SinhVien& sv) {
+    int dem = 0;
+    for (const MonHoc& mon : sv.danhSachMon) {
+        if (monHocDat(mon)) dem++;
+    }
+    return dem;
+}
+
+// ============================================================
+// Đếm số môn đã rớt của 1 sinh viên
+// ============================================================
+int demSoMonRot(const SinhVien& sv) {
+    return static_cast<int>(sv.danhSachMon.size()) - demSoMonDat(sv);
 }
 
 // ============================================================

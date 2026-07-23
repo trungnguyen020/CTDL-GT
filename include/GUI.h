@@ -17,9 +17,12 @@ bool khoiTaoGUI();
 // Vẽ 1 khung hình giao diện (gọi liên tục trong vòng lặp chính main.cpp)
 // danhSach: tham chiếu tới danh sách sinh viên đang quản lý trong bộ nhớ
 // db: con trỏ database — dùng để đồng bộ (lưu/xóa) xuống SQLite mỗi khi
-//     người dùng thêm/sửa/xóa sinh viên trên giao diện
+//     người dùng thêm/sửa/xóa sinh viên hoặc môn học trên giao diện
+// danhSachMonChuan: danh mục tên môn học chung (dùng làm dropdown chọn môn
+//     ở tab "Quản lý sinh viên"), quản lý thêm/xóa ở tab "Thêm môn học"
 // Trả về false khi người dùng đóng cửa sổ (để main.cpp thoát vòng lặp)
-bool veKhungHinh(DanhSachSinhVien& danhSach, sqlite3* db);
+bool veKhungHinh(DanhSachSinhVien& danhSach, sqlite3* db,
+                  std::vector<std::string>& danhSachMonChuan);
 
 // Giải phóng tài nguyên GUI (gọi 1 lần trước khi chương trình kết thúc)
 void giaiPhongGUI();

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 static GLFWwindow* window = nullptr;
 
@@ -25,7 +26,7 @@ bool khoiTaoGUI() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    window = glfwCreateWindow(1000, 700, "Quan Ly Diem Sinh Vien", nullptr, nullptr);
+    window = glfwCreateWindow(1050, 750, "Quan Ly Diem Sinh Vien", nullptr, nullptr);
     if (window == nullptr) {
         glfwTerminate();
         return false;
@@ -45,10 +46,380 @@ bool khoiTaoGUI() {
 }
 
 // ============================================================
+// TAB 1: THÊM SINH VIÊN MỚI (chỉ Mã SV + Họ tên, lưu ngay, chưa cần điểm)
+// ============================================================
+static void veTabThemSinhVien(DanhSachSinhVien& danhSach, sqlite3* db) {
+    static char bufMaSV[32] = "";
+    static char bufHoTen[128] = "";
+    static std::string thongBao = "";
+
+    ImGui::TextWrapped("Nhap Ma SV va Ho ten de tao 1 sinh vien moi. "
+                        "Diem se duoc nhap sau o tab 'Quan ly sinh vien'.");
+    ImGui::Spacing();
+
+    ImGui::InputText("Ma sinh vien##sv", bufMaSV, IM_ARRAYSIZE(bufMaSV));
+    ImGui::InputText("Ho ten##sv", bufHoTen, IM_ARRAYSIZE(bufHoTen));
+
+    if (ImGui::Button("Them sinh vien", ImVec2(150, 30))) {
+        if (strlen(bufMaSV) == 0 || strlen(bufHoTen) == 0) {
+            thongBao = "Loi: chua nhap Ma SV hoac Ho ten";
+        } else if (danhSach.timSinhVien(bufMaSV) != nullptr) {
+            thongBao = "Loi: Ma SV nay da ton tai";
+        } else {
+            SinhVien sv;
+            sv.maSV = bufMaSV;
+            sv.hoTen = bufHoTen;
+
+            danhSach.themSinhVien(sv);
+            luuSinhVien(db, sv); // đồng bộ xuống SQLite ngay
+
+            thongBao = "Da them sinh vien " + sv.maSV + ". Sang tab 'Quan ly sinh vien' de nhap diem.";
+
+            bufMaSV[0] = '\0';
+            bufHoTen[0] = '\0';
+        }
+    }
+
+    if (!thongBao.empty()) {
+        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", thongBao.c_str());
+    }
+}
+
+// ============================================================
+// TAB 2: THÊM MÔN HỌC (quản lý danh mục môn học chung dùng chung
+// cho toàn bộ sinh viên, hiển thị dạng dropdown ở tab Quản lý sinh viên)
+// ============================================================
+static void veTabThemMonHoc(sqlite3* db, std::vector<std::string>& danhSachMonChuan) {
+    static char bufTenMonMoi[64] = "";
+    static std::string thongBao = "";
+
+    ImGui::TextWrapped("Danh muc mon hoc nay dung chung cho ca lop, "
+                        "se hien ra de chon khi nhap diem cho tung sinh vien.");
+    ImGui::Spacing();
+
+    ImGui::InputText("Ten mon hoc moi", bufTenMonMoi, IM_ARRAYSIZE(bufTenMonMoi));
+
+    if (ImGui::Button("Them mon hoc", ImVec2(150, 30))) {
+        std::string ten = bufTenMonMoi;
+        if (ten.empty()) {
+            thongBao = "Loi: chua nhap ten mon hoc";
+        } else if (std::find(danhSachMonChuan.begin(), danhSachMonChuan.end(), ten) != danhSachMonChuan.end()) {
+            thongBao = "Loi: mon hoc nay da co trong danh muc";
+        } else {
+            danhSachMonChuan.push_back(ten);
+            luuMonHocChuan(db, ten);
+            thongBao = "Da them mon: " + ten;
+            bufTenMonMoi[0] = '\0';
+        }
+    }
+
+    if (!thongBao.empty()) {
+        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", thongBao.c_str());
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Danh muc mon hoc hien co (%d):", (int)danhSachMonChuan.size());
+
+    int indexCanXoa = -1;
+    for (int i = 0; i < (int)danhSachMonChuan.size(); i++) {
+        ImGui::PushID(i);
+        ImGui::BulletText("%s", danhSachMonChuan[i].c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Xoa")) {
+            indexCanXoa = i;
+        }
+        ImGui::PopID();
+    }
+
+    // Xóa sau vòng lặp để tránh sửa vector đang được duyệt dở
+    if (indexCanXoa >= 0) {
+        xoaMonHocChuan(db, danhSachMonChuan[indexCanXoa]);
+        danhSachMonChuan.erase(danhSachMonChuan.begin() + indexCanXoa);
+    }
+
+    if (danhSachMonChuan.empty()) {
+        ImGui::TextDisabled("Chua co mon hoc nao. Them it nhat 1 mon o tren "
+                             "truoc khi sang tab 'Quan ly sinh vien'.");
+    }
+}
+
+// ============================================================
+// TAB 3: QUẢN LÝ SINH VIÊN (chọn SV -> chọn môn -> nhập điểm ->
+// xem kết quả ngay -> có thể xóa sinh viên tại đây)
+// ============================================================
+static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, sqlite3* db,
+                                 const std::vector<std::string>& danhSachMonChuan) {
+    static std::string maSVdangChon = "";
+    static int monDangChonIndex = -1;
+    static float diemGiuaKy = 0.0f;
+    static float diemCuoiKy = 0.0f;
+    static std::string thongBao = "";
+
+    std::vector<SinhVien> ds = danhSach.layDanhSach();
+
+    if (ds.empty()) {
+        ImGui::TextDisabled("Chua co sinh vien nao. Sang tab 'Them sinh vien' de tao truoc.");
+        return;
+    }
+
+    // ---- Combo chọn sinh viên (dùng maSV làm khóa, không dùng index,
+    // để không bị lệch khi danh sách được sắp xếp lại) ----
+    std::string nhanChonSV = "-- Chon sinh vien --";
+    for (const SinhVien& sv : ds) {
+        if (sv.maSV == maSVdangChon) {
+            nhanChonSV = sv.maSV + " - " + sv.hoTen;
+            break;
+        }
+    }
+
+    if (ImGui::BeginCombo("Chon sinh vien", nhanChonSV.c_str())) {
+        for (const SinhVien& sv : ds) {
+            bool dangChon = (sv.maSV == maSVdangChon);
+            std::string dong = sv.maSV + " - " + sv.hoTen;
+            if (ImGui::Selectable(dong.c_str(), dangChon)) {
+                maSVdangChon = sv.maSV;
+                thongBao = "";
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    if (maSVdangChon.empty()) {
+        ImGui::TextDisabled("Chon 1 sinh vien o tren de bat dau quan ly diem.");
+        return;
+    }
+
+    SinhVien* sv = danhSach.timSinhVien(maSVdangChon);
+    if (sv == nullptr) {
+        // Sinh viên vừa bị xóa (có thể từ tab khác) -> reset lựa chọn
+        maSVdangChon = "";
+        return;
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Dang quan ly: %s - %s", sv->maSV.c_str(), sv->hoTen.c_str());
+
+    if (ImGui::Button("Xoa sinh vien nay", ImVec2(180, 30))) {
+        danhSach.xoaSinhVien(sv->maSV);
+        xoaSinhVienDB(db, sv->maSV);
+        thongBao = "Da xoa sinh vien " + maSVdangChon;
+        maSVdangChon = ""; // reset lựa chọn vì sinh viên không còn tồn tại
+        ImGui::Separator();
+        if (!thongBao.empty()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "%s", thongBao.c_str());
+        }
+        return; // dừng vẽ phần còn lại của tab vì sv đã bị xóa
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Nhap diem mon hoc:");
+
+    if (danhSachMonChuan.empty()) {
+        ImGui::TextDisabled("Chua co mon hoc nao trong danh muc. "
+                             "Sang tab 'Them mon hoc' de them truoc.");
+    } else {
+        std::string nhanChonMon = "-- Chon mon hoc --";
+        if (monDangChonIndex >= 0 && monDangChonIndex < (int)danhSachMonChuan.size()) {
+            nhanChonMon = danhSachMonChuan[monDangChonIndex];
+        }
+
+        if (ImGui::BeginCombo("Chon mon hoc", nhanChonMon.c_str())) {
+            for (int i = 0; i < (int)danhSachMonChuan.size(); i++) {
+                bool dangChon = (monDangChonIndex == i);
+                if (ImGui::Selectable(danhSachMonChuan[i].c_str(), dangChon)) {
+                    monDangChonIndex = i;
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        ImGui::InputFloat("Diem giua ky##ql", &diemGiuaKy, 0.5f);
+        ImGui::InputFloat("Diem cuoi ky##ql", &diemCuoiKy, 0.5f);
+
+        if (ImGui::Button("Luu diem mon nay", ImVec2(180, 30))) {
+            if (monDangChonIndex < 0) {
+                thongBao = "Loi: chua chon mon hoc";
+            } else {
+                std::string tenMon = danhSachMonChuan[monDangChonIndex];
+
+                // Nếu môn này đã có điểm trước đó -> cập nhật đè lên,
+                // chưa có -> thêm mới. Tránh 1 sinh viên bị trùng môn.
+                MonHoc* monDaCo = nullptr;
+                for (MonHoc& mon : sv->danhSachMon) {
+                    if (mon.tenMon == tenMon) {
+                        monDaCo = &mon;
+                        break;
+                    }
+                }
+
+                if (monDaCo != nullptr) {
+                    monDaCo->diemGiuaKy = diemGiuaKy;
+                    monDaCo->diemCuoiKy = diemCuoiKy;
+                } else {
+                    MonHoc monMoi;
+                    monMoi.tenMon = tenMon;
+                    monMoi.diemGiuaKy = diemGiuaKy;
+                    monMoi.diemCuoiKy = diemCuoiKy;
+                    sv->danhSachMon.push_back(monMoi);
+                }
+
+                capNhatKetQua(*sv);
+                capNhatSinhVienDB(db, *sv); // đồng bộ xuống SQLite
+
+                thongBao = "Da luu diem mon " + tenMon;
+                diemGiuaKy = 0.0f;
+                diemCuoiKy = 0.0f;
+                monDangChonIndex = -1;
+            }
+        }
+    }
+
+    if (!thongBao.empty()) {
+        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", thongBao.c_str());
+    }
+
+    ImGui::Separator();
+
+    // ---- Hiển thị kết quả tổng thể ngay lập tức ----
+    if (sv->danhSachMon.empty()) {
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.3f, 1.0f), "Chua co diem mon nao");
+    } else {
+        ImGui::Text("Diem trung binh: %.2f", sv->diemTB);
+        ImGui::SameLine();
+        if (sv->datMonHoc) {
+            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), " -> DAU");
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), " -> ROT");
+        }
+
+        ImGui::Text("Cac mon da nhap:");
+        for (const MonHoc& mon : sv->danhSachMon) {
+            bool dat = monHocDat(mon);
+            ImGui::BulletText("%s - GK: %.1f, CK: %.1f, TK: %.2f -",
+                mon.tenMon.c_str(), mon.diemGiuaKy, mon.diemCuoiKy, mon.diemTongKet);
+            ImGui::SameLine();
+            if (dat) {
+                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "Dau");
+            } else {
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Rot");
+            }
+        }
+    }
+}
+
+// ============================================================
+// TAB 4: DANH SÁCH SINH VIÊN (bảng tổng quan, click xem chi tiết
+// số môn đậu/rớt; xóa ở đây cũng đồng bộ vì dùng chung danhSach)
+// ============================================================
+static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, sqlite3* db) {
+    static char bufTimKiem[32] = "";
+    static std::string maSVdangXem = "";
+
+    if (ImGui::Button("Sap xep theo diem TB (giam dan)")) {
+        danhSach.sapXepTheoDiemTB();
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(200);
+    ImGui::InputText("Tim theo Ma SV", bufTimKiem, IM_ARRAYSIZE(bufTimKiem));
+
+    ImGui::Text("Tong so: %d | Dau: %d | Rot: %d | Chua co diem: %d | Diem TB toan lop: %.2f",
+        danhSach.demSoLuong(), danhSach.demSoDau(), danhSach.demSoRot(),
+        danhSach.demSoChuaCoDiem(), danhSach.diemTBToanLop());
+
+    ImGui::Separator();
+
+    std::vector<SinhVien> ds = danhSach.layDanhSach();
+    std::string tuKhoa = bufTimKiem;
+
+    if (ImGui::BeginTable("BangDanhSach", 7,
+            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
+            ImVec2(0, 220))) {
+
+        ImGui::TableSetupColumn("Ma SV");
+        ImGui::TableSetupColumn("Ho ten");
+        ImGui::TableSetupColumn("So mon");
+        ImGui::TableSetupColumn("Diem TB");
+        ImGui::TableSetupColumn("Ket qua chung");
+        ImGui::TableSetupColumn("Xem");
+        ImGui::TableSetupColumn("Xoa");
+        ImGui::TableHeadersRow();
+
+        for (const SinhVien& sv : ds) {
+            if (!tuKhoa.empty() && sv.maSV.find(tuKhoa) == std::string::npos) {
+                continue;
+            }
+
+            ImGui::PushID(sv.maSV.c_str());
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn(); ImGui::Text("%s", sv.maSV.c_str());
+            ImGui::TableNextColumn(); ImGui::Text("%s", sv.hoTen.c_str());
+            ImGui::TableNextColumn(); ImGui::Text("%d", (int)sv.danhSachMon.size());
+            ImGui::TableNextColumn(); ImGui::Text("%.2f", sv.diemTB);
+
+            ImGui::TableNextColumn();
+            if (sv.danhSachMon.empty()) {
+                ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.3f, 1.0f), "Chua co diem");
+            } else if (sv.datMonHoc) {
+                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "Dau");
+            } else {
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Rot");
+            }
+
+            ImGui::TableNextColumn();
+            if (ImGui::SmallButton("Xem chi tiet")) {
+                maSVdangXem = (maSVdangXem == sv.maSV) ? "" : sv.maSV; // bấm lại để đóng
+            }
+
+            ImGui::TableNextColumn();
+            if (ImGui::SmallButton("Xoa")) {
+                danhSach.xoaSinhVien(sv.maSV);
+                xoaSinhVienDB(db, sv.maSV);
+                if (maSVdangXem == sv.maSV) maSVdangXem = "";
+            }
+
+            ImGui::PopID();
+        }
+
+        ImGui::EndTable();
+    }
+
+    // ---- Khu vực chi tiết: số môn đậu/rớt của sinh viên đang xem ----
+    if (!maSVdangXem.empty()) {
+        SinhVien* svXem = danhSach.timSinhVien(maSVdangXem);
+        if (svXem == nullptr) {
+            maSVdangXem = ""; // đã bị xóa
+        } else {
+            ImGui::Separator();
+            ImGui::Text("Chi tiet: %s - %s", svXem->maSV.c_str(), svXem->hoTen.c_str());
+
+            if (svXem->danhSachMon.empty()) {
+                ImGui::TextDisabled("Sinh vien nay chua co diem mon nao.");
+            } else {
+                ImGui::Text("So mon dau: %d | So mon rot: %d",
+                    demSoMonDat(*svXem), demSoMonRot(*svXem));
+
+                for (const MonHoc& mon : svXem->danhSachMon) {
+                    bool dat = monHocDat(mon);
+                    ImGui::BulletText("%s - Diem tong ket: %.2f -",
+                        mon.tenMon.c_str(), mon.diemTongKet);
+                    ImGui::SameLine();
+                    if (dat) {
+                        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "Dau");
+                    } else {
+                        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Rot");
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
 // Vẽ 1 khung hình giao diện — được gọi liên tục trong vòng lặp chính
 // Trả về false khi người dùng đóng cửa sổ
 // ============================================================
-bool veKhungHinh(DanhSachSinhVien& danhSach, sqlite3* db) {
+bool veKhungHinh(DanhSachSinhVien& danhSach, sqlite3* db,
+                  std::vector<std::string>& danhSachMonChuan) {
     if (glfwWindowShouldClose(window)) {
         return false;
     }
@@ -58,195 +429,32 @@ bool veKhungHinh(DanhSachSinhVien& danhSach, sqlite3* db) {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    // ---- Buffer nhập liệu (giữ trạng thái giữa các khung hình) ----
-    static char bufMaSV[32] = "";
-    static char bufHoTen[128] = "";
-    static std::string thongBaoSV = "";
-
-    static int svDangChon = -1; // index trong vector layDanhSach() đang chọn để nhập điểm
-    static char bufTenMon[64] = "";
-    static float diemGiuaKy = 0.0f;
-    static float diemCuoiKy = 0.0f;
-    static std::string thongBaoDiem = "";
-
-    static char bufTimKiem[32] = "";
-
-    ImGui::SetNextWindowSize(ImVec2(950, 700), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(1000, 720), ImGuiCond_FirstUseEver);
     ImGui::Begin("Quan ly diem sinh vien");
 
-    // ============================================================
-    // KHU VỰC 1: THÊM SINH VIÊN MỚI (chưa cần điểm, lưu ngay)
-    // ============================================================
-    if (ImGui::CollapsingHeader("1. Them sinh vien moi", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::InputText("Ma sinh vien##sv", bufMaSV, IM_ARRAYSIZE(bufMaSV));
-        ImGui::InputText("Ho ten##sv", bufHoTen, IM_ARRAYSIZE(bufHoTen));
+    if (ImGui::BeginTabBar("TabChinh")) {
 
-        if (ImGui::Button("Them sinh vien", ImVec2(150, 30))) {
-            if (strlen(bufMaSV) == 0 || strlen(bufHoTen) == 0) {
-                thongBaoSV = "Loi: chua nhap Ma SV hoac Ho ten";
-            } else if (danhSach.timSinhVien(bufMaSV) != nullptr) {
-                thongBaoSV = "Loi: Ma SV nay da ton tai";
-            } else {
-                SinhVien sv;
-                sv.maSV = bufMaSV;
-                sv.hoTen = bufHoTen;
-                // Chưa có môn học nào -> diemTB = 0, datMonHoc mặc định false
-                // (sẽ hiển thị rõ là "Chua co diem" ở bảng bên dưới, không
-                // nhầm thành "Rot" cho tới khi thực sự nhập điểm)
-
-                danhSach.themSinhVien(sv);
-                luuSinhVien(db, sv); // đồng bộ xuống SQLite ngay
-
-                thongBaoSV = "Da them sinh vien " + sv.maSV + ". Nhap diem o muc 2 ben duoi.";
-
-                bufMaSV[0] = '\0';
-                bufHoTen[0] = '\0';
-            }
+        if (ImGui::BeginTabItem("1. Them sinh vien")) {
+            veTabThemSinhVien(danhSach, db);
+            ImGui::EndTabItem();
         }
 
-        if (!thongBaoSV.empty()) {
-            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", thongBaoSV.c_str());
-        }
-    }
-
-    ImGui::Separator();
-
-    // ============================================================
-    // KHU VỰC 2: NHẬP ĐIỂM CHO SINH VIÊN ĐÃ CÓ TRONG DANH SÁCH
-    // ============================================================
-    if (ImGui::CollapsingHeader("2. Nhap diem mon hoc", ImGuiTreeNodeFlags_DefaultOpen)) {
-        std::vector<SinhVien> dsChonDiem = danhSach.layDanhSach();
-
-        std::string nhanChon = "-- Chon sinh vien --";
-        if (svDangChon >= 0 && svDangChon < (int)dsChonDiem.size()) {
-            nhanChon = dsChonDiem[svDangChon].maSV + " - " + dsChonDiem[svDangChon].hoTen;
+        if (ImGui::BeginTabItem("2. Them mon hoc")) {
+            veTabThemMonHoc(db, danhSachMonChuan);
+            ImGui::EndTabItem();
         }
 
-        if (ImGui::BeginCombo("Chon sinh vien", nhanChon.c_str())) {
-            for (int i = 0; i < (int)dsChonDiem.size(); i++) {
-                bool dangChon = (svDangChon == i);
-                std::string dong = dsChonDiem[i].maSV + " - " + dsChonDiem[i].hoTen;
-                if (ImGui::Selectable(dong.c_str(), dangChon)) {
-                    svDangChon = i;
-                }
-            }
-            ImGui::EndCombo();
+        if (ImGui::BeginTabItem("3. Quan ly sinh vien")) {
+            veTabQuanLySinhVien(danhSach, db, danhSachMonChuan);
+            ImGui::EndTabItem();
         }
 
-        if (svDangChon >= 0 && svDangChon < (int)dsChonDiem.size()) {
-            ImGui::InputText("Ten mon##diem", bufTenMon, IM_ARRAYSIZE(bufTenMon));
-            ImGui::InputFloat("Diem giua ky##diem", &diemGiuaKy, 0.5f);
-            ImGui::InputFloat("Diem cuoi ky##diem", &diemCuoiKy, 0.5f);
-
-            if (ImGui::Button("Them diem mon nay", ImVec2(180, 30))) {
-                if (strlen(bufTenMon) == 0) {
-                    thongBaoDiem = "Loi: chua nhap ten mon";
-                } else {
-                    std::string maSVdangChon = dsChonDiem[svDangChon].maSV;
-                    SinhVien* sv = danhSach.timSinhVien(maSVdangChon);
-
-                    if (sv != nullptr) {
-                        MonHoc mon;
-                        mon.tenMon = bufTenMon;
-                        mon.diemGiuaKy = diemGiuaKy;
-                        mon.diemCuoiKy = diemCuoiKy;
-                        sv->danhSachMon.push_back(mon);
-                        capNhatKetQua(*sv);
-
-                        capNhatSinhVienDB(db, *sv); // đồng bộ xuống SQLite
-
-                        thongBaoDiem = "Da them mon " + mon.tenMon + " cho " + sv->maSV;
-
-                        bufTenMon[0] = '\0';
-                        diemGiuaKy = 0.0f;
-                        diemCuoiKy = 0.0f;
-                    }
-                }
-            }
-
-            // Hiển thị các môn đã có sẵn của sinh viên đang chọn
-            SinhVien* svXem = danhSach.timSinhVien(dsChonDiem[svDangChon].maSV);
-            if (svXem != nullptr && !svXem->danhSachMon.empty()) {
-                ImGui::Text("Cac mon da nhap:");
-                for (const MonHoc& mon : svXem->danhSachMon) {
-                    ImGui::BulletText("%s - GK: %.1f, CK: %.1f, TK: %.2f",
-                        mon.tenMon.c_str(), mon.diemGiuaKy, mon.diemCuoiKy, mon.diemTongKet);
-                }
-            }
-        } else {
-            ImGui::TextDisabled("Chon 1 sinh vien o tren de bat dau nhap diem.");
+        if (ImGui::BeginTabItem("4. Danh sach sinh vien")) {
+            veTabDanhSachSinhVien(danhSach, db);
+            ImGui::EndTabItem();
         }
 
-        if (!thongBaoDiem.empty()) {
-            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", thongBaoDiem.c_str());
-        }
-    }
-
-    ImGui::Separator();
-
-    // ============================================================
-    // KHU VỰC 3: TÌM KIẾM + SẮP XẾP + THỐNG KÊ
-    // ============================================================
-    ImGui::Text("3. Danh sach sinh vien");
-    ImGui::InputText("Tim theo Ma SV", bufTimKiem, IM_ARRAYSIZE(bufTimKiem));
-    ImGui::SameLine();
-    if (ImGui::Button("Sap xep theo diem TB (giam dan)")) {
-        danhSach.sapXepTheoDiemTB();
-    }
-
-    ImGui::Text("Tong so: %d | Dau: %d | Rot: %d | Chua co diem: %d | Diem TB toan lop: %.2f",
-        danhSach.demSoLuong(), danhSach.demSoDau(), danhSach.demSoRot(),
-        danhSach.demSoChuaCoDiem(), danhSach.diemTBToanLop());
-
-    ImGui::Separator();
-
-    // ============================================================
-    // KHU VỰC 3: BẢNG DANH SÁCH SINH VIÊN
-    // ============================================================
-    std::vector<SinhVien> ds = danhSach.layDanhSach();
-    std::string tuKhoa = bufTimKiem;
-
-    if (ImGui::BeginTable("BangSinhVien", 6,
-            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
-            ImVec2(0, 300))) {
-
-        ImGui::TableSetupColumn("Ma SV");
-        ImGui::TableSetupColumn("Ho ten");
-        ImGui::TableSetupColumn("So mon");
-        ImGui::TableSetupColumn("Diem TB");
-        ImGui::TableSetupColumn("Ket qua");
-        ImGui::TableSetupColumn("Hanh dong");
-        ImGui::TableHeadersRow();
-
-        for (const SinhVien& sv : ds) {
-            // Lọc theo từ khóa tìm kiếm nếu có nhập
-            if (!tuKhoa.empty() && sv.maSV.find(tuKhoa) == std::string::npos) {
-                continue;
-            }
-
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn(); ImGui::Text("%s", sv.maSV.c_str());
-            ImGui::TableNextColumn(); ImGui::Text("%s", sv.hoTen.c_str());
-            ImGui::TableNextColumn(); ImGui::Text("%d", (int)sv.danhSachMon.size());
-            ImGui::TableNextColumn(); ImGui::Text("%.2f", sv.diemTB);
-            ImGui::TableNextColumn();
-            if (sv.danhSachMon.empty()) {
-                ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.3f, 1.0f), "Chua co diem");
-            } else if (sv.datMonHoc) {
-                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "Dau");
-            } else {
-                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Rot");
-            }
-            ImGui::TableNextColumn();
-            ImGui::PushID(sv.maSV.c_str());
-            if (ImGui::SmallButton("Xoa")) {
-                danhSach.xoaSinhVien(sv.maSV);
-                xoaSinhVienDB(db, sv.maSV); // đồng bộ xuống SQLite
-            }
-            ImGui::PopID();
-        }
-
-        ImGui::EndTable();
+        ImGui::EndTabBar();
     }
 
     ImGui::End();

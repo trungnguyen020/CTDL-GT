@@ -35,12 +35,20 @@ sqlite3* moKetNoiDB(const std::string& duongDan) {
         "  FOREIGN KEY(maSV) REFERENCES sinhvien(maSV)"
         ");";
 
+    const char* taoBangMonHocChuan =
+        "CREATE TABLE IF NOT EXISTS monhocchuan ("
+        "  tenMon TEXT PRIMARY KEY"
+        ");";
+
     char* loi = nullptr;
     sqlite3_exec(db, taoBangSinhVien, nullptr, nullptr, &loi);
     if (loi) { std::cerr << "Loi tao bang sinhvien: " << loi << std::endl; sqlite3_free(loi); }
 
     sqlite3_exec(db, taoBangMonHoc, nullptr, nullptr, &loi);
     if (loi) { std::cerr << "Loi tao bang monhoc: " << loi << std::endl; sqlite3_free(loi); }
+
+    sqlite3_exec(db, taoBangMonHocChuan, nullptr, nullptr, &loi);
+    if (loi) { std::cerr << "Loi tao bang monhocchuan: " << loi << std::endl; sqlite3_free(loi); }
 
     return db;
 }
@@ -200,6 +208,54 @@ std::vector<SinhVien> docTatCaSinhVien(sqlite3* db) {
         ketQua.push_back(sv);
     }
     sqlite3_finalize(stmtSV);
+
+    return ketQua;
+}
+
+// ============================================================
+// Thêm 1 tên môn học vào danh mục chung (bỏ qua nếu đã tồn tại)
+// ============================================================
+bool luuMonHocChuan(sqlite3* db, const std::string& tenMon) {
+    const char* sql = "INSERT OR IGNORE INTO monhocchuan (tenMon) VALUES (?);";
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, tenMon.c_str(), -1, SQLITE_STATIC);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    return rc == SQLITE_DONE;
+}
+
+// ============================================================
+// Xóa 1 tên môn học khỏi danh mục chung
+// ============================================================
+bool xoaMonHocChuan(sqlite3* db, const std::string& tenMon) {
+    const char* sql = "DELETE FROM monhocchuan WHERE tenMon = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, tenMon.c_str(), -1, SQLITE_STATIC);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    return rc == SQLITE_DONE;
+}
+
+// ============================================================
+// Đọc toàn bộ danh mục môn học chung, sắp xếp theo alphabet
+// ============================================================
+std::vector<std::string> docDanhSachMonHocChuan(sqlite3* db) {
+    std::vector<std::string> ketQua;
+
+    const char* sql = "SELECT tenMon FROM monhocchuan ORDER BY tenMon;";
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        ketQua.push_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+    }
+    sqlite3_finalize(stmt);
 
     return ketQua;
 }

@@ -42,7 +42,7 @@ Các lần build sau sẽ nhanh hơn nhiều vì thư viện đã có sẵn tron
 
 ```bash
 # Windows
-.\build\Debug\QuanLyDiem.exe
+.\build\QuanLyDiem.exe
 
 # Linux/macOS
 ./build/QuanLyDiem

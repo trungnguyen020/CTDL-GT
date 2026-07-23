@@ -20,6 +20,9 @@ int main() {
         danhSach.themSinhVien(sv);
     }
 
+    // 2b. Đọc danh mục môn học chung (dùng cho dropdown chọn môn ở GUI)
+    std::vector<std::string> danhSachMonChuan = docDanhSachMonHocChuan(db);
+
     // 3. Khởi tạo GUI
     if (!khoiTaoGUI()) {
         dongKetNoiDB(db);
@@ -29,9 +32,10 @@ int main() {
     // 4. Vòng lặp chính: vẽ giao diện liên tục cho tới khi người dùng thoát
     bool dangChay = true;
     while (dangChay) {
-        dangChay = veKhungHinh(danhSach, db);
+        dangChay = veKhungHinh(danhSach, db, danhSachMonChuan);
         // Việc lưu/xóa xuống SQLite giờ đã được gọi trực tiếp bên trong
-        // veKhungHinh (xem GUI.cpp) mỗi khi người dùng thêm/xóa sinh viên.
+        // veKhungHinh (xem GUI.cpp) mỗi khi người dùng thêm/xóa sinh viên
+        // hoặc môn học.
     }
 
     // 5. Dọn dẹp tài nguyên

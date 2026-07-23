@@ -32,4 +32,18 @@ bool xoaSinhVienDB(sqlite3* db, const std::string& maSV);
 // DanhSachSinhVien (linked list) lúc khởi động chương trình
 std::vector<SinhVien> docTatCaSinhVien(sqlite3* db);
 
+// ============================================================
+// Quản lý danh mục môn học chung (dùng để hiển thị dropdown chọn môn
+// ở tab "Quản lý sinh viên", thay vì phải gõ tay tên môn mỗi lần)
+// ============================================================
+
+// Thêm 1 tên môn học vào danh mục chung
+bool luuMonHocChuan(sqlite3* db, const std::string& tenMon);
+
+// Xóa 1 tên môn học khỏi danh mục chung
+bool xoaMonHocChuan(sqlite3* db, const std::string& tenMon);
+
+// Đọc toàn bộ danh mục môn học chung
+std::vector<std::string> docDanhSachMonHocChuan(sqlite3* db);
+
 #endif // DATABASE_H

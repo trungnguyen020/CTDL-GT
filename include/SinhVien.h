@@ -40,10 +40,19 @@ float tinhDiemTongKet(const MonHoc& mon);
 // Tính điểm trung bình của toàn bộ các môn trong 1 sinh viên
 float tinhDiemTrungBinh(const SinhVien& sv);
 
-// Xét đậu/rớt: quy tắc mẫu — TB >= 4.0 và không môn nào < 3.9
+// Xét đậu/rớt: quy tắc mẫu — TB >= 5.0 và không môn nào < 4.0
 bool xetKetQua(const SinhVien& sv);
 
-// Cập nhật lại diemTB và datMonHoc cho 1 sinh viên (gọi sau khi thêm/sửa điểm)
+// Xét đậu/rớt cho MỘT môn học riêng lẻ (khác với xét đậu/rớt tổng thể của SV,
+// dùng để hiển thị "sinh viên đậu/rớt bao nhiêu môn" ở màn hình danh sách)
+bool monHocDat(const MonHoc& mon);
+
+// Đếm số môn đã đậu / đã rớt của 1 sinh viên (dựa trên monHocDat)
+int demSoMonDat(const SinhVien& sv);
+int demSoMonRot(const SinhVien& sv);
+
+// Cập nhật lại điểm tổng kết từng môn, điểm TB, và kết quả đậu/rớt
+// Hàm này nên được gọi mỗi khi thêm/sửa điểm 1 môn học nào đó
 void capNhatKetQua(SinhVien& sv);
 
 #endif // SINHVIEN_H
