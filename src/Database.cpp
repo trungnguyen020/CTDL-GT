@@ -40,6 +40,12 @@ sqlite3* moKetNoiDB(const std::string& duongDan) {
         "  tenMon TEXT PRIMARY KEY"
         ");";
 
+    const char* taoBangTaiKhoan =
+        "CREATE TABLE IF NOT EXISTS taikhoan ("
+        "  tenDangNhap TEXT PRIMARY KEY,"
+        "  matKhau TEXT NOT NULL"
+        ");";
+
     char* loi = nullptr;
     sqlite3_exec(db, taoBangSinhVien, nullptr, nullptr, &loi);
     if (loi) { std::cerr << "Loi tao bang sinhvien: " << loi << std::endl; sqlite3_free(loi); }
@@ -49,6 +55,23 @@ sqlite3* moKetNoiDB(const std::string& duongDan) {
 
     sqlite3_exec(db, taoBangMonHocChuan, nullptr, nullptr, &loi);
     if (loi) { std::cerr << "Loi tao bang monhocchuan: " << loi << std::endl; sqlite3_free(loi); }
+
+    sqlite3_exec(db, taoBangTaiKhoan, nullptr, nullptr, &loi);
+    if (loi) { std::cerr << "Loi tao bang taikhoan: " << loi << std::endl; sqlite3_free(loi); }
+
+    // Seed 1 tai khoan giao vien mac dinh neu bang dang rong (lan chay dau tien)
+    const char* demTaiKhoan = "SELECT COUNT(*) FROM taikhoan;";
+    sqlite3_stmt* stmtDem = nullptr;
+    sqlite3_prepare_v2(db, demTaiKhoan, -1, &stmtDem, nullptr);
+    if (sqlite3_step(stmtDem) == SQLITE_ROW) {
+        int soLuong = sqlite3_column_int(stmtDem, 0);
+        if (soLuong == 0) {
+            sqlite3_exec(db,
+                "INSERT INTO taikhoan (tenDangNhap, matKhau) VALUES ('giaovien', '123456');",
+                nullptr, nullptr, nullptr);
+        }
+    }
+    sqlite3_finalize(stmtDem);
 
     return db;
 }
@@ -258,4 +281,23 @@ std::vector<std::string> docDanhSachMonHocChuan(sqlite3* db) {
     sqlite3_finalize(stmt);
 
     return ketQua;
+}
+
+// ============================================================
+// Kiểm tra đăng nhập: tìm tenDangNhap trong bảng, so khớp matKhau
+// ============================================================
+bool kiemTraDangNhap(sqlite3* db, const std::string& tenDangNhap, const std::string& matKhau) {
+    const char* sql = "SELECT matKhau FROM taikhoan WHERE tenDangNhap = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, tenDangNhap.c_str(), -1, SQLITE_STATIC);
+
+    bool hopLe = false;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        std::string matKhauLuu = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        hopLe = (matKhauLuu == matKhau);
+    }
+    sqlite3_finalize(stmt);
+
+    return hopLe;
 }

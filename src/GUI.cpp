@@ -48,7 +48,7 @@ bool khoiTaoGUI() {
 // ============================================================
 // TAB 1: THÊM SINH VIÊN MỚI (chỉ Mã SV + Họ tên, lưu ngay, chưa cần điểm)
 // ============================================================
-static void veTabThemSinhVien(DanhSachSinhVien& danhSach, sqlite3* db) {
+static void veTabThemSinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db) {
     static char bufMaSV[32] = "";
     static char bufHoTen[128] = "";
     static std::string thongBao = "";
@@ -63,7 +63,7 @@ static void veTabThemSinhVien(DanhSachSinhVien& danhSach, sqlite3* db) {
     if (ImGui::Button("Them sinh vien", ImVec2(150, 30))) {
         if (strlen(bufMaSV) == 0 || strlen(bufHoTen) == 0) {
             thongBao = "Loi: chua nhap Ma SV hoac Ho ten";
-        } else if (danhSach.timSinhVien(bufMaSV) != nullptr) {
+        } else if (danhSach.timSinhVien(bufMaSV) != nullptr || caySV.timSinhVien(bufMaSV) != nullptr) {
             thongBao = "Loi: Ma SV nay da ton tai";
         } else {
             SinhVien sv;
@@ -71,6 +71,7 @@ static void veTabThemSinhVien(DanhSachSinhVien& danhSach, sqlite3* db) {
             sv.hoTen = bufHoTen;
 
             danhSach.themSinhVien(sv);
+            caySV.themSinhVien(sv);
             luuSinhVien(db, sv); // đồng bộ xuống SQLite ngay
 
             thongBao = "Da them sinh vien " + sv.maSV + ". Sang tab 'Quan ly sinh vien' de nhap diem.";
@@ -147,7 +148,7 @@ static void veTabThemMonHoc(sqlite3* db, std::vector<std::string>& danhSachMonCh
 // TAB 3: QUẢN LÝ SINH VIÊN (chọn SV -> chọn môn -> nhập điểm ->
 // xem kết quả ngay -> có thể xóa sinh viên tại đây)
 // ============================================================
-static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, sqlite3* db,
+static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
                                  const std::vector<std::string>& danhSachMonChuan) {
     static std::string maSVdangChon = "";
     static int monDangChonIndex = -1;
@@ -189,7 +190,7 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, sqlite3* db,
         return;
     }
 
-    SinhVien* sv = danhSach.timSinhVien(maSVdangChon);
+    SinhVien* sv = caySV.timSinhVien(maSVdangChon);
     if (sv == nullptr) {
         // Sinh viên vừa bị xóa (có thể từ tab khác) -> reset lựa chọn
         maSVdangChon = "";
@@ -201,6 +202,7 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, sqlite3* db,
 
     if (ImGui::Button("Xoa sinh vien nay", ImVec2(180, 30))) {
         danhSach.xoaSinhVien(sv->maSV);
+        caySV.xoaSinhVien(sv->maSV);
         xoaSinhVienDB(db, sv->maSV);
         thongBao = "Da xoa sinh vien " + maSVdangChon;
         maSVdangChon = ""; // reset lựa chọn vì sinh viên không còn tồn tại
@@ -265,6 +267,7 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, sqlite3* db,
 
                 capNhatKetQua(*sv);
                 capNhatSinhVienDB(db, *sv); // đồng bộ xuống SQLite
+                caySV.capNhatSinhVien(sv->maSV, *sv);
 
                 thongBao = "Da luu diem mon " + tenMon;
                 diemGiuaKy = 0.0f;
@@ -311,7 +314,7 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, sqlite3* db,
 // TAB 4: DANH SÁCH SINH VIÊN (bảng tổng quan, click xem chi tiết
 // số môn đậu/rớt; xóa ở đây cũng đồng bộ vì dùng chung danhSach)
 // ============================================================
-static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, sqlite3* db) {
+static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db) {
     static char bufTimKiem[32] = "";
     static std::string maSVdangXem = "";
 
@@ -373,6 +376,7 @@ static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, sqlite3* db) {
             ImGui::TableNextColumn();
             if (ImGui::SmallButton("Xoa")) {
                 danhSach.xoaSinhVien(sv.maSV);
+                caySV.xoaSinhVien(sv.maSV);
                 xoaSinhVienDB(db, sv.maSV);
                 if (maSVdangXem == sv.maSV) maSVdangXem = "";
             }
@@ -385,7 +389,7 @@ static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, sqlite3* db) {
 
     // ---- Khu vực chi tiết: số môn đậu/rớt của sinh viên đang xem ----
     if (!maSVdangXem.empty()) {
-        SinhVien* svXem = danhSach.timSinhVien(maSVdangXem);
+        SinhVien* svXem = caySV.timSinhVien(maSVdangXem);
         if (svXem == nullptr) {
             maSVdangXem = ""; // đã bị xóa
         } else {
@@ -418,7 +422,7 @@ static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, sqlite3* db) {
 // Vẽ 1 khung hình giao diện — được gọi liên tục trong vòng lặp chính
 // Trả về false khi người dùng đóng cửa sổ
 // ============================================================
-bool veKhungHinh(DanhSachSinhVien& danhSach, sqlite3* db,
+bool veKhungHinh(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
                   std::vector<std::string>& danhSachMonChuan) {
     if (glfwWindowShouldClose(window)) {
         return false;
@@ -435,7 +439,7 @@ bool veKhungHinh(DanhSachSinhVien& danhSach, sqlite3* db,
     if (ImGui::BeginTabBar("TabChinh")) {
 
         if (ImGui::BeginTabItem("1. Them sinh vien")) {
-            veTabThemSinhVien(danhSach, db);
+            veTabThemSinhVien(danhSach, caySV, db);
             ImGui::EndTabItem();
         }
 
@@ -445,12 +449,12 @@ bool veKhungHinh(DanhSachSinhVien& danhSach, sqlite3* db,
         }
 
         if (ImGui::BeginTabItem("3. Quan ly sinh vien")) {
-            veTabQuanLySinhVien(danhSach, db, danhSachMonChuan);
+            veTabQuanLySinhVien(danhSach, caySV, db, danhSachMonChuan);
             ImGui::EndTabItem();
         }
 
         if (ImGui::BeginTabItem("4. Danh sach sinh vien")) {
-            veTabDanhSachSinhVien(danhSach, db);
+            veTabDanhSachSinhVien(danhSach, caySV, db);
             ImGui::EndTabItem();
         }
 

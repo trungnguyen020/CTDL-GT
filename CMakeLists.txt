@@ -58,6 +58,7 @@ add_executable(QuanLyDiem
     src/main.cpp
     src/SinhVien.cpp
     src/LinkedList.cpp
+    src/Bst.cpp
     src/Database.cpp
     src/GUI.cpp
     ${IMGUI_SOURCES}
@@ -79,4 +80,17 @@ if (WIN32)
 else()
     find_package(OpenGL REQUIRED)
     target_link_libraries(QuanLyDiem PRIVATE OpenGL::GL ${CMAKE_DL_LIBS} pthread)
+endif()
+
+# ------------------------------------------------------------
+# 6. Cấu hình DEPLOY: gộp tĩnh (static) runtime của MinGW vào file .exe
+# để máy khác chạy được mà KHÔNG cần cài MinGW hay bất kỳ DLL nào thêm.
+# Chỉ áp dụng khi build ở chế độ Release (dùng để phát hành/nộp bài).
+# ------------------------------------------------------------
+if (MINGW)
+    target_link_options(QuanLyDiem PRIVATE
+        -static-libgcc
+        -static-libstdc++
+        -static
+    )
 endif()

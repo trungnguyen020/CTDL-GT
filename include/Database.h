@@ -46,4 +46,13 @@ bool xoaMonHocChuan(sqlite3* db, const std::string& tenMon);
 // Đọc toàn bộ danh mục môn học chung
 std::vector<std::string> docDanhSachMonHocChuan(sqlite3* db);
 
+// ============================================================
+// Đăng nhập giáo viên (tài khoản duy nhất, không có vai trò sinh viên)
+// ============================================================
+
+// Kiểm tra tên đăng nhập + mật khẩu có khớp trong bảng taikhoan không.
+// Lưu ý: đây là bài tập lớn nên lưu mật khẩu dạng thô (plain text) cho
+// đơn giản — trong ứng dụng thực tế cần mã hóa (hash) mật khẩu.
+bool kiemTraDangNhap(sqlite3* db, const std::string& tenDangNhap, const std::string& matKhau);
+
 #endif // DATABASE_H
