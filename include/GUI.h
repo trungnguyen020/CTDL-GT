@@ -28,6 +28,10 @@ bool khoiTaoGUI();
 bool veKhungHinh(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
                   std::vector<std::string>& danhSachMonChuan);
 
+// Hiển thị màn hình đăng nhập (blocking loop) — trả về true nếu đăng
+// nhập thành công, false nếu người dùng đóng cửa sổ/thoát.
+bool veLogin(sqlite3* db);
+
 // Giải phóng tài nguyên GUI (gọi 1 lần trước khi chương trình kết thúc)
 void giaiPhongGUI();
 

@@ -46,6 +46,79 @@ bool khoiTaoGUI() {
 }
 
 // ============================================================
+// Màn hình đăng nhập giáo viên (đơn giản, blocking trong vòng lặp
+// ImGui cho tới khi đăng nhập thành công hoặc người dùng đóng cửa sổ)
+// ============================================================
+bool veLogin(sqlite3* db) {
+    static char bufUser[64] = "";
+    static char bufPass[64] = "";
+    static std::string thongBao = "";
+
+    while (true) {
+        if (glfwWindowShouldClose(window)) return false;
+
+        glfwPollEvents();
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // Giữ cửa sổ đăng nhập nhỏ, căn giữa
+        ImGui::SetNextWindowSize(ImVec2(400, 180), ImGuiCond_FirstUseEver);
+        ImGui::Begin("Dang nhap giao vien", nullptr, ImGuiWindowFlags_NoResize);
+
+        ImGui::InputText("Ten dang nhap", bufUser, IM_ARRAYSIZE(bufUser));
+        ImGui::InputText("Mat khau", bufPass, IM_ARRAYSIZE(bufPass), ImGuiInputTextFlags_Password);
+
+        if (ImGui::Button("Dang nhap", ImVec2(120, 0))) {
+            if (kiemTraDangNhap(db, std::string(bufUser), std::string(bufPass))) {
+                // Xoá buffer cho lần sau nếu cần
+                bufUser[0] = '\0'; bufPass[0] = '\0'; thongBao.clear();
+                ImGui::End();
+                ImGui::Render();
+                int display_w, display_h; glfwGetFramebufferSize(window, &display_w, &display_h);
+                glViewport(0, 0, display_w, display_h);
+                glClearColor(0.12f, 0.12f, 0.14f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+                ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+                glfwSwapBuffers(window);
+                return true;
+            } else {
+                thongBao = "Dang nhap that bai: ten dang nhap hoac mat khau khong dung";
+            }
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Thoat", ImVec2(120, 0))) {
+            ImGui::End();
+            ImGui::Render();
+            int display_w, display_h; glfwGetFramebufferSize(window, &display_w, &display_h);
+            glViewport(0, 0, display_w, display_h);
+            glClearColor(0.12f, 0.12f, 0.14f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            glfwSwapBuffers(window);
+            return false;
+        }
+
+        if (!thongBao.empty()) {
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "%s", thongBao.c_str());
+        }
+
+        ImGui::End();
+
+        // Render và swap
+        ImGui::Render();
+        int display_w, display_h; glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(0.12f, 0.12f, 0.14f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glfwSwapBuffers(window);
+    }
+}
+
+// ============================================================
 // TAB 1: THÊM SINH VIÊN MỚI (chỉ Mã SV + Họ tên, lưu ngay, chưa cần điểm)
 // ============================================================
 static void veTabThemSinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db) {

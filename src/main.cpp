@@ -34,6 +34,14 @@ int main() {
         return -1;
     }
 
+    // 3b. Hiển thị màn hình đăng nhập trước khi vào giao diện chính
+    if (!veLogin(db)) {
+        // Người dùng đã đóng/thoát trong màn hình đăng nhập
+        giaiPhongGUI();
+        dongKetNoiDB(db);
+        return 0;
+    }
+
     // 4. Vòng lặp chính: vẽ giao diện liên tục cho tới khi người dùng thoát
     bool dangChay = true;
     while (dangChay) {
