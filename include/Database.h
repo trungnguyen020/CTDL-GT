@@ -46,6 +46,9 @@ bool xoaMonHocChuan(sqlite3* db, const std::string& tenMon);
 // Đọc toàn bộ danh mục môn học chung
 std::vector<std::string> docDanhSachMonHocChuan(sqlite3* db);
 
+// Lấy hệ số (weightGK, weightCK) cho một môn học chuẩn
+std::pair<float,float> layHeSoMonHoc(sqlite3* db, const std::string& tenMon);
+
 // ============================================================
 // Đăng nhập giáo viên (tài khoản duy nhất, không có vai trò sinh viên)
 // ============================================================

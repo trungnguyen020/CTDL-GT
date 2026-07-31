@@ -37,7 +37,9 @@ sqlite3* moKetNoiDB(const std::string& duongDan) {
 
     const char* taoBangMonHocChuan =
         "CREATE TABLE IF NOT EXISTS monhocchuan ("
-        "  tenMon TEXT PRIMARY KEY"
+        "  tenMon TEXT PRIMARY KEY,"
+        "  weight_gk REAL DEFAULT 0.4,"
+        "  weight_ck REAL DEFAULT 0.6"
         ");";
 
     const char* taoBangTaiKhoan =
@@ -55,6 +57,10 @@ sqlite3* moKetNoiDB(const std::string& duongDan) {
 
     sqlite3_exec(db, taoBangMonHocChuan, nullptr, nullptr, &loi);
     if (loi) { std::cerr << "Loi tao bang monhocchuan: " << loi << std::endl; sqlite3_free(loi); }
+
+    // Nếu người dùng cập nhật từ phiên bản cũ, cố gắng thêm cột weight nếu chưa có
+    sqlite3_exec(db, "ALTER TABLE monhocchuan ADD COLUMN weight_gk REAL DEFAULT 0.4;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db, "ALTER TABLE monhocchuan ADD COLUMN weight_ck REAL DEFAULT 0.6;", nullptr, nullptr, nullptr);
 
     sqlite3_exec(db, taoBangTaiKhoan, nullptr, nullptr, &loi);
     if (loi) { std::cerr << "Loi tao bang taikhoan: " << loi << std::endl; sqlite3_free(loi); }
@@ -224,6 +230,12 @@ std::vector<SinhVien> docTatCaSinhVien(sqlite3* db) {
             mon.diemGiuaKy = static_cast<float>(sqlite3_column_double(stmtMon, 1));
             mon.diemCuoiKy = static_cast<float>(sqlite3_column_double(stmtMon, 2));
             mon.diemTongKet = static_cast<float>(sqlite3_column_double(stmtMon, 3));
+            // Lấy hệ số cho môn này từ bảng monhocchuan nếu có
+            auto hs = layHeSoMonHoc(db, mon.tenMon);
+            mon.weightGK = hs.first;
+            mon.weightCK = hs.second;
+            // Recompute TK to ensure consistency with current weights
+            mon.diemTongKet = tinhDiemTongKet(mon);
             sv.danhSachMon.push_back(mon);
         }
         sqlite3_finalize(stmtMon);
@@ -239,10 +251,12 @@ std::vector<SinhVien> docTatCaSinhVien(sqlite3* db) {
 // Thêm 1 tên môn học vào danh mục chung (bỏ qua nếu đã tồn tại)
 // ============================================================
 bool luuMonHocChuan(sqlite3* db, const std::string& tenMon) {
-    const char* sql = "INSERT OR IGNORE INTO monhocchuan (tenMon) VALUES (?);";
+    const char* sql = "INSERT OR IGNORE INTO monhocchuan (tenMon, weight_gk, weight_ck) VALUES (?, ?, ?);";
     sqlite3_stmt* stmt = nullptr;
     sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
     sqlite3_bind_text(stmt, 1, tenMon.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_double(stmt, 2, 0.4);
+    sqlite3_bind_double(stmt, 3, 0.6);
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -317,4 +331,19 @@ bool taoTaiKhoan(sqlite3* db, const std::string& tenDangNhap, const std::string&
     sqlite3_finalize(stmt);
 
     return rc == SQLITE_DONE;
+}
+
+std::pair<float,float> layHeSoMonHoc(sqlite3* db, const std::string& tenMon) {
+    const char* sql = "SELECT weight_gk, weight_ck FROM monhocchuan WHERE tenMon = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, tenMon.c_str(), -1, SQLITE_STATIC);
+
+    float wg = 0.4f, wc = 0.6f;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        wg = static_cast<float>(sqlite3_column_double(stmt, 0));
+        wc = static_cast<float>(sqlite3_column_double(stmt, 1));
+    }
+    sqlite3_finalize(stmt);
+    return {wg, wc};
 }

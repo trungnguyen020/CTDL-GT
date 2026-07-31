@@ -398,6 +398,11 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, 
                     monMoi.tenMon = tenMon;
                     monMoi.diemGiuaKy = diemGiuaKy;
                     monMoi.diemCuoiKy = diemCuoiKy;
+                    // lấy hệ số môn chuẩn từ DB
+                    auto hs = layHeSoMonHoc(db, tenMon);
+                    monMoi.weightGK = hs.first;
+                    monMoi.weightCK = hs.second;
+                    monMoi.diemTongKet = tinhDiemTongKet(monMoi);
                     sv->danhSachMon.push_back(monMoi);
                 }
 
