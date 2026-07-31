@@ -341,6 +341,8 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, 
                 capNhatKetQua(*sv);
                 capNhatSinhVienDB(db, *sv); // đồng bộ xuống SQLite
                 caySV.capNhatSinhVien(sv->maSV, *sv);
+                // Đồng bộ sang linked list để GUI và các thống kê dùng chung cập nhật đúng
+                danhSach.suaSinhVien(sv->maSV, *sv);
 
                 thongBao = "Da luu diem mon " + tenMon;
                 diemGiuaKy = 0.0f;
