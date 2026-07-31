@@ -26,7 +26,7 @@ int main() {
     }
 
     // 2b. Đọc danh mục môn học chung (dùng cho dropdown chọn môn ở GUI)
-    std::vector<std::string> danhSachMonChuan = docDanhSachMonHocChuan(db);
+    std::vector<MonHocChuan> danhSachMonChuan = docDanhSachMonHocChuan(db);
 
     // 3. Khởi tạo GUI
     if (!khoiTaoGUI()) {

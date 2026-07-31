@@ -6,6 +6,15 @@
 #include <vector>
 #include <string>
 
+// Thông tin danh mục môn học chuẩn, kèm trọng số giữa kỳ/cuối kỳ
+struct MonHocChuan {
+	std::string tenMon;
+	float weightGK;
+	float weightCK;
+	MonHocChuan() : weightGK(0.4f), weightCK(0.6f) {}
+	MonHocChuan(const std::string& t, float g, float c) : tenMon(t), weightGK(g), weightCK(c) {}
+};
+
 // ============================================================
 // Module Database — người phụ trách phần này chỉ cần biết SQL cơ bản,
 // không cần hiểu chi tiết linked list hay GUI.
@@ -37,17 +46,14 @@ std::vector<SinhVien> docTatCaSinhVien(sqlite3* db);
 // ở tab "Quản lý sinh viên", thay vì phải gõ tay tên môn mỗi lần)
 // ============================================================
 
-// Thêm 1 tên môn học vào danh mục chung
-bool luuMonHocChuan(sqlite3* db, const std::string& tenMon);
+// Thêm 1 tên môn học vào danh mục chung kèm trọng số (GK/CK)
+bool luuMonHocChuan(sqlite3* db, const std::string& tenMon, float weightGK = 0.4f, float weightCK = 0.6f);
 
 // Xóa 1 tên môn học khỏi danh mục chung
 bool xoaMonHocChuan(sqlite3* db, const std::string& tenMon);
 
-// Đọc toàn bộ danh mục môn học chung
-std::vector<std::string> docDanhSachMonHocChuan(sqlite3* db);
-
-// Lấy hệ số (weightGK, weightCK) cho một môn học chuẩn
-std::pair<float,float> layHeSoMonHoc(sqlite3* db, const std::string& tenMon);
+// Đọc toàn bộ danh mục môn học chung (kèm trọng số)
+std::vector<MonHocChuan> docDanhSachMonHocChuan(sqlite3* db);
 
 // ============================================================
 // Đăng nhập giáo viên (tài khoản duy nhất, không có vai trò sinh viên)

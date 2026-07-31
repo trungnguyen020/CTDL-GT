@@ -3,6 +3,7 @@
 
 #include "LinkedList.h"
 #include "Bst.h"
+#include "Database.h"
 #include <sqlite3.h>
 
 // ============================================================
@@ -26,7 +27,7 @@ bool khoiTaoGUI();
 //     ở tab "Quản lý sinh viên"), quản lý thêm/xóa ở tab "Thêm môn học"
 // Trả về false khi người dùng đóng cửa sổ (để main.cpp thoát vòng lặp)
 bool veKhungHinh(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
-                  std::vector<std::string>& danhSachMonChuan);
+                  std::vector<MonHocChuan>& danhSachMonChuan);
 
 // Hiển thị màn hình đăng nhập (blocking loop) — trả về true nếu đăng
 // nhập thành công, false nếu người dùng đóng cửa sổ/thoát.

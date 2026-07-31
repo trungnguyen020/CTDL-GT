@@ -205,8 +205,10 @@ static void veTabThemSinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sq
 // TAB 2: THÊM MÔN HỌC (quản lý danh mục môn học chung dùng chung
 // cho toàn bộ sinh viên, hiển thị dạng dropdown ở tab Quản lý sinh viên)
 // ============================================================
-static void veTabThemMonHoc(sqlite3* db, std::vector<std::string>& danhSachMonChuan) {
+static void veTabThemMonHoc(sqlite3* db, std::vector<MonHocChuan>& danhSachMonChuan) {
     static char bufTenMonMoi[64] = "";
+    static float weightGK = 0.4f;
+    static float weightCK = 0.6f;
     static std::string thongBao = "";
 
     ImGui::TextWrapped("Danh muc mon hoc nay dung chung cho ca lop, "
@@ -214,18 +216,24 @@ static void veTabThemMonHoc(sqlite3* db, std::vector<std::string>& danhSachMonCh
     ImGui::Spacing();
 
     ImGui::InputText("Ten mon hoc moi", bufTenMonMoi, IM_ARRAYSIZE(bufTenMonMoi));
+    ImGui::InputFloat("Trong so GK (0..1)", &weightGK, 0.01f, 0.1f, "%.2f");
+    ImGui::InputFloat("Trong so CK (0..1)", &weightCK, 0.01f, 0.1f, "%.2f");
 
     if (ImGui::Button("Them mon hoc", ImVec2(150, 30))) {
         std::string ten = bufTenMonMoi;
         if (ten.empty()) {
             thongBao = "Loi: chua nhap ten mon hoc";
-        } else if (std::find(danhSachMonChuan.begin(), danhSachMonChuan.end(), ten) != danhSachMonChuan.end()) {
-            thongBao = "Loi: mon hoc nay da co trong danh muc";
         } else {
-            danhSachMonChuan.push_back(ten);
-            luuMonHocChuan(db, ten);
-            thongBao = "Da them mon: " + ten;
-            bufTenMonMoi[0] = '\0';
+            bool exists = false;
+            for (const auto &m : danhSachMonChuan) if (m.tenMon == ten) { exists = true; break; }
+            if (exists) {
+                thongBao = "Loi: mon hoc nay da co trong danh muc";
+            } else {
+                danhSachMonChuan.emplace_back(ten, weightGK, weightCK);
+                luuMonHocChuan(db, ten, weightGK, weightCK);
+                thongBao = "Da them mon: " + ten;
+                bufTenMonMoi[0] = '\0';
+            }
         }
     }
 
@@ -239,7 +247,7 @@ static void veTabThemMonHoc(sqlite3* db, std::vector<std::string>& danhSachMonCh
     int indexCanXoa = -1;
     for (int i = 0; i < (int)danhSachMonChuan.size(); i++) {
         ImGui::PushID(i);
-        ImGui::BulletText("%s", danhSachMonChuan[i].c_str());
+        ImGui::BulletText("%s (GK: %.0f%%, CK: %.0f%%)", danhSachMonChuan[i].tenMon.c_str(), danhSachMonChuan[i].weightGK*100.0f, danhSachMonChuan[i].weightCK*100.0f);
         ImGui::SameLine();
         if (ImGui::SmallButton("Xoa")) {
             indexCanXoa = i;
@@ -249,7 +257,7 @@ static void veTabThemMonHoc(sqlite3* db, std::vector<std::string>& danhSachMonCh
 
     // Xóa sau vòng lặp để tránh sửa vector đang được duyệt dở
     if (indexCanXoa >= 0) {
-        xoaMonHocChuan(db, danhSachMonChuan[indexCanXoa]);
+        xoaMonHocChuan(db, danhSachMonChuan[indexCanXoa].tenMon);
         danhSachMonChuan.erase(danhSachMonChuan.begin() + indexCanXoa);
     }
 
@@ -264,7 +272,7 @@ static void veTabThemMonHoc(sqlite3* db, std::vector<std::string>& danhSachMonCh
 // xem kết quả ngay -> có thể xóa sinh viên tại đây)
 // ============================================================
 static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
-                                 const std::vector<std::string>& danhSachMonChuan) {
+                                 const std::vector<MonHocChuan>& danhSachMonChuan) {
     static std::string maSVdangChon = "";
     static int monDangChonIndex = -1;
     static float diemGiuaKy = 0.0f;
@@ -358,13 +366,13 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, 
     } else {
         std::string nhanChonMon = "-- Chon mon hoc --";
         if (monDangChonIndex >= 0 && monDangChonIndex < (int)danhSachMonChuan.size()) {
-            nhanChonMon = danhSachMonChuan[monDangChonIndex];
+            nhanChonMon = danhSachMonChuan[monDangChonIndex].tenMon;
         }
 
         if (ImGui::BeginCombo("Chon mon hoc", nhanChonMon.c_str())) {
             for (int i = 0; i < (int)danhSachMonChuan.size(); i++) {
                 bool dangChon = (monDangChonIndex == i);
-                if (ImGui::Selectable(danhSachMonChuan[i].c_str(), dangChon)) {
+                if (ImGui::Selectable(danhSachMonChuan[i].tenMon.c_str(), dangChon)) {
                     monDangChonIndex = i;
                 }
             }
@@ -378,7 +386,7 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, 
             if (monDangChonIndex < 0) {
                 thongBao = "Loi: chua chon mon hoc";
             } else {
-                std::string tenMon = danhSachMonChuan[monDangChonIndex];
+                std::string tenMon = danhSachMonChuan[monDangChonIndex].tenMon;
 
                 // Nếu môn này đã có điểm trước đó -> cập nhật đè lên,
                 // chưa có -> thêm mới. Tránh 1 sinh viên bị trùng môn.
@@ -396,13 +404,11 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, 
                 } else {
                     MonHoc monMoi;
                     monMoi.tenMon = tenMon;
+                    // set per-course weights from danhSachMonChuan
+                    monMoi.weightGK = danhSachMonChuan[monDangChonIndex].weightGK;
+                    monMoi.weightCK = danhSachMonChuan[monDangChonIndex].weightCK;
                     monMoi.diemGiuaKy = diemGiuaKy;
                     monMoi.diemCuoiKy = diemCuoiKy;
-                    // lấy hệ số môn chuẩn từ DB
-                    auto hs = layHeSoMonHoc(db, tenMon);
-                    monMoi.weightGK = hs.first;
-                    monMoi.weightCK = hs.second;
-                    monMoi.diemTongKet = tinhDiemTongKet(monMoi);
                     sv->danhSachMon.push_back(monMoi);
                 }
 
@@ -592,7 +598,7 @@ static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV
 // Trả về false khi người dùng đóng cửa sổ
 // ============================================================
 bool veKhungHinh(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
-                  std::vector<std::string>& danhSachMonChuan) {
+                  std::vector<MonHocChuan>& danhSachMonChuan) {
     if (glfwWindowShouldClose(window)) {
         return false;
     }

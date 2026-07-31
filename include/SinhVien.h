@@ -12,8 +12,8 @@ struct MonHoc {
     float diemGiuaKy;
     float diemCuoiKy;
     float diemTongKet;   // = diemGiuaKy * 0.3 + diemCuoiKy * 0.7 (tùy quy chế)
-    float weightGK; // fraction for midterm (e.g., 0.4)
-    float weightCK; // fraction for final (e.g., 0.6)
+    float weightGK;
+    float weightCK;
 
     MonHoc() : diemGiuaKy(0), diemCuoiKy(0), diemTongKet(0), weightGK(0.4f), weightCK(0.6f) {}
 };

@@ -5,10 +5,7 @@
 // Công thức mẫu: 30% giữa kỳ + 70% cuối kỳ (có thể chỉnh theo quy chế thật)
 // ============================================================
 float tinhDiemTongKet(const MonHoc& mon) {
-    float wg = mon.weightGK;
-    float wc = mon.weightCK;
-    if (wg + wc == 0.0f) return 0.0f;
-    return mon.diemGiuaKy * wg + mon.diemCuoiKy * wc;
+    return mon.diemGiuaKy * mon.weightGK + mon.diemCuoiKy * mon.weightCK;
 }
 
 // ============================================================
