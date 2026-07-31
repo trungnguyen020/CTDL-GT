@@ -13,6 +13,9 @@
 #include <algorithm>
 
 static GLFWwindow* window = nullptr;
+// Hiện tại user đăng nhập và role (teacher nếu không phải maSV)
+static std::string g_currentUser = "";
+static bool g_isTeacher = false;
 
 // ============================================================
 // Khởi tạo cửa sổ GLFW + context ImGui
@@ -72,6 +75,15 @@ bool veLogin(sqlite3* db) {
         if (ImGui::Button("Dang nhap", ImVec2(120, 0))) {
             if (kiemTraDangNhap(db, std::string(bufUser), std::string(bufPass))) {
                 // Xoá buffer cho lần sau nếu cần
+                // lưu tên user và xác định role (nếu trùng maSV thì là sinh viên)
+                g_currentUser = std::string(bufUser);
+                // Kiểm tra nếu có sinh viên tương ứng trong DB
+                {
+                    auto ds = docTatCaSinhVien(db);
+                    bool found = false;
+                    for (const auto& s : ds) if (s.maSV == g_currentUser) { found = true; break; }
+                    g_isTeacher = !found;
+                }
                 bufUser[0] = '\0'; bufPass[0] = '\0'; thongBao.clear();
                 ImGui::End();
                 ImGui::Render();
@@ -151,11 +163,41 @@ static void veTabThemSinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sq
 
             bufMaSV[0] = '\0';
             bufHoTen[0] = '\0';
+            // lưu mã SV vừa tạo để dễ tạo tài khoản
+            static std::string lastAddedMaSV = "";
+            lastAddedMaSV = sv.maSV;
         }
     }
 
     if (!thongBao.empty()) {
         ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", thongBao.c_str());
+    }
+
+    // Nút tạo tài khoản SV cho mã vừa thêm
+    {
+        ImGui::Spacing();
+        ImGui::TextDisabled("Tao tai khoan cho sinh vien (user = maSV, password mac dinh = 123456)");
+        if (ImGui::Button("Tao tai khoan cho maSV gan nhat", ImVec2(240, 0))) {
+            extern bool taoTaiKhoan(sqlite3* db, const std::string& tenDangNhap, const std::string& matKhau);
+            // lấy lastAddedMaSV (static trong hàm) bằng cách reusing input
+            // (không có cách trực tiếp vì hàm nội bộ). Thay vào đó, nếu bufMaSV rỗng,
+            // tìm sinh viên cuối cùng trong DB
+            auto ds = docTatCaSinhVien(db);
+            if (!ds.empty()) {
+                std::string last = ds.back().maSV;
+                if (taoTaiKhoan(db, last, "123456")) {
+                    ImGui::OpenPopup("ThongBaoTaoTaiKhoan");
+                } else {
+                    ImGui::OpenPopup("ThongBaoTaoTaiKhoan");
+                }
+            }
+        }
+
+        if (ImGui::BeginPopupModal("ThongBaoTaoTaiKhoan", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Hoan tat thao tac. (mat khau mac dinh: 123456)");
+            if (ImGui::Button("OK")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
     }
 }
 
@@ -273,7 +315,7 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, 
     ImGui::Separator();
     ImGui::Text("Dang quan ly: %s - %s", sv->maSV.c_str(), sv->hoTen.c_str());
 
-    if (ImGui::Button("Xoa sinh vien nay", ImVec2(180, 30))) {
+    if (ImGui::Button("Xoa sinh vien nay", ImVec2(140, 30))) {
         danhSach.xoaSinhVien(sv->maSV);
         caySV.xoaSinhVien(sv->maSV);
         xoaSinhVienDB(db, sv->maSV);
@@ -284,6 +326,27 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, 
             ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "%s", thongBao.c_str());
         }
         return; // dừng vẽ phần còn lại của tab vì sv đã bị xóa
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Sua thong tin", ImVec2(140,30))) {
+        ImGui::OpenPopup("SuaThongTinSV");
+    }
+
+    if (ImGui::BeginPopupModal("SuaThongTinSV", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+        static char editHoTen[128];
+        strncpy(editHoTen, sv->hoTen.c_str(), sizeof(editHoTen)); editHoTen[sizeof(editHoTen)-1]='\0';
+        ImGui::InputText("Ho ten moi", editHoTen, IM_ARRAYSIZE(editHoTen));
+        if (ImGui::Button("Luu")) {
+            sv->hoTen = std::string(editHoTen);
+            capNhatSinhVienDB(db, *sv);
+            caySV.capNhatSinhVien(sv->maSV, *sv);
+            danhSach.suaSinhVien(sv->maSV, *sv);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Huy")) { ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
     }
 
     ImGui::Separator();
@@ -371,8 +434,10 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, 
         }
 
         ImGui::Text("Cac mon da nhap:");
-        for (const MonHoc& mon : sv->danhSachMon) {
+        for (int i = 0; i < (int)sv->danhSachMon.size(); ++i) {
+            MonHoc& mon = sv->danhSachMon[i];
             bool dat = monHocDat(mon);
+            ImGui::PushID(i);
             ImGui::BulletText("%s - GK: %.1f, CK: %.1f, TK: %.2f -",
                 mon.tenMon.c_str(), mon.diemGiuaKy, mon.diemCuoiKy, mon.diemTongKet);
             ImGui::SameLine();
@@ -381,6 +446,30 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, 
             } else {
                 ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Rot");
             }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Sua")) {
+                ImGui::OpenPopup("SuaDiemMon");
+            }
+
+            if (ImGui::BeginPopupModal("SuaDiemMon", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+                static float editGK = 0.0f;
+                static float editCK = 0.0f;
+                editGK = mon.diemGiuaKy; editCK = mon.diemCuoiKy;
+                ImGui::InputFloat("Diem giua ky", &editGK, 0.5f);
+                ImGui::InputFloat("Diem cuoi ky", &editCK, 0.5f);
+                if (ImGui::Button("Luu")) {
+                    mon.diemGiuaKy = editGK;
+                    mon.diemCuoiKy = editCK;
+                    capNhatKetQua(*sv);
+                    capNhatSinhVienDB(db, *sv);
+                    caySV.capNhatSinhVien(sv->maSV, *sv);
+                    danhSach.suaSinhVien(sv->maSV, *sv);
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine(); if (ImGui::Button("Huy")) ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
+            }
+            ImGui::PopID();
         }
     }
 }
@@ -510,6 +599,41 @@ bool veKhungHinh(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
 
     ImGui::SetNextWindowSize(ImVec2(1000, 720), ImGuiCond_FirstUseEver);
     ImGui::Begin("Quan ly diem sinh vien");
+
+    // Nếu user hiện tại là sinh viên, hiển thị chế độ xem điểm đơn giản
+    if (!g_isTeacher) {
+        SinhVien* my = caySV.timSinhVien(g_currentUser);
+        if (my == nullptr) {
+            ImGui::TextDisabled("Khong tim thay thong tin sinh vien. Co the tai khoan chua duoc tao hoac maSV khong dung.");
+        } else {
+            ImGui::Text("Sinh vien: %s - %s", my->maSV.c_str(), my->hoTen.c_str());
+            ImGui::Separator();
+            if (my->danhSachMon.empty()) {
+                ImGui::TextDisabled("Chua co diem mon nao.");
+            } else {
+                ImGui::Text("Diem trung binh: %.2f", my->diemTB);
+                ImGui::Text("Cac mon:");
+                for (const MonHoc& mon : my->danhSachMon) {
+                    ImGui::BulletText("%s - GK: %.1f, CK: %.1f, TK: %.2f", mon.tenMon.c_str(), mon.diemGiuaKy, mon.diemCuoiKy, mon.diemTongKet);
+                }
+            }
+        }
+        ImGui::Separator();
+        if (ImGui::Button("Thoat")) {
+            // Đóng cửa sổ
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+        ImGui::End();
+        // Render và swap sau hàm gọi chính
+        ImGui::Render();
+        int display_w, display_h; glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(0.12f, 0.12f, 0.14f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glfwSwapBuffers(window);
+        return true;
+    }
 
     if (ImGui::BeginTabBar("TabChinh")) {
 

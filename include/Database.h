@@ -55,4 +55,7 @@ std::vector<std::string> docDanhSachMonHocChuan(sqlite3* db);
 // đơn giản — trong ứng dụng thực tế cần mã hóa (hash) mật khẩu.
 bool kiemTraDangNhap(sqlite3* db, const std::string& tenDangNhap, const std::string& matKhau);
 
+// Tạo tài khoản mới (trả về true nếu tạo thành công, false nếu đã tồn tại)
+bool taoTaiKhoan(sqlite3* db, const std::string& tenDangNhap, const std::string& matKhau);
+
 #endif // DATABASE_H

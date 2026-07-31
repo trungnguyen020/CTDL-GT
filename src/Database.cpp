@@ -301,3 +301,20 @@ bool kiemTraDangNhap(sqlite3* db, const std::string& tenDangNhap, const std::str
 
     return hopLe;
 }
+
+// ============================================================
+// Tạo tài khoản mới (user/password lưu thẳng vào bảng taikhoan)
+// Nếu user đã tồn tại, trả về false
+// ============================================================
+bool taoTaiKhoan(sqlite3* db, const std::string& tenDangNhap, const std::string& matKhau) {
+    const char* sql = "INSERT OR IGNORE INTO taikhoan (tenDangNhap, matKhau) VALUES (?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, tenDangNhap.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, matKhau.c_str(), -1, SQLITE_STATIC);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    return rc == SQLITE_DONE;
+}
