@@ -1,4 +1,5 @@
 #include "SinhVien.h"
+#include <string>
 
 // ============================================================
 // Tính điểm tổng kết cho 1 môn học
@@ -80,4 +81,17 @@ void capNhatKetQua(SinhVien& sv) {
     // Sau đó tính điểm trung bình và xét kết quả
     sv.diemTB = tinhDiemTrungBinh(sv);
     sv.datMonHoc = xetKetQua(sv);
+}
+
+std::string chuyenDiem10SangChu(float diemTB) {
+    if (diemTB >= 9.0f) return "A+";
+    if (diemTB >= 8.5f) return "A";
+    if (diemTB >= 8.0f) return "B+";
+    if (diemTB >= 7.0f) return "B";
+    if (diemTB >= 6.5f) return "C+";
+    if (diemTB >= 5.5f) return "C";
+    if (diemTB >= 5.0f) return "D+";
+    if (diemTB >= 4.0f) return "D";
+    if (diemTB >= 3.5f) return "F+";
+    return "F";
 }

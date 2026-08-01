@@ -57,4 +57,7 @@ int demSoMonRot(const SinhVien& sv);
 // Hàm này nên được gọi mỗi khi thêm/sửa điểm 1 môn học nào đó
 void capNhatKetQua(SinhVien& sv);
 
+// Chuyển đổi điểm trung bình hệ 10 sang xếp loại A+/A/B+/B/C+/C/D+/D/F+/F
+std::string chuyenDiem10SangChu(float diemTB);
+
 #endif // SINHVIEN_H

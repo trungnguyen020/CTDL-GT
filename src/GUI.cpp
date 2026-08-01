@@ -11,11 +11,36 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <fstream>
+#include <iomanip>
 
 static GLFWwindow* window = nullptr;
 // Hiện tại user đăng nhập và role (teacher nếu không phải maSV)
 static std::string g_currentUser = "";
 static bool g_isTeacher = false;
+
+static bool xuatBaoCao(const DanhSachSinhVien& danhSach, const std::string& duongDan = "bao_cao_diem.csv") {
+    std::ofstream out(duongDan, std::ios::out | std::ios::trunc);
+    if (!out.is_open()) {
+        return false;
+    }
+
+    auto ds = danhSach.layDanhSach();
+    out << "BAO CAO DIEM SINH VIEN\n";
+    out << "Tong so sinh vien;" << ds.size() << "\n";
+    out << "MaSV;HoTen;DiemTB;XepLoai;TrangThai\n";
+
+    for (const auto& sv : ds) {
+        std::string trangThai = sv.datMonHoc ? "Dau" : "Rot";
+        out << sv.maSV << ";" << sv.hoTen << ";"
+            << std::fixed << std::setprecision(2) << sv.diemTB << ";"
+            << chuyenDiem10SangChu(sv.diemTB) << ";"
+            << trangThai << "\n";
+    }
+
+    out.close();
+    return true;
+}
 
 // ============================================================
 // Khởi tạo cửa sổ GLFW + context ImGui
@@ -492,6 +517,7 @@ static void veTabQuanLySinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, 
 static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db) {
     static char bufTimKiem[32] = "";
     static std::string maSVdangXem = "";
+    static std::string thongBaoBaoCao = "";
 
     if (ImGui::Button("Sap xep theo diem TB (giam dan)")) {
         danhSach.sapXepTheoDiemTB();
@@ -504,12 +530,24 @@ static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV
         danhSach.demSoLuong(), danhSach.demSoDau(), danhSach.demSoRot(),
         danhSach.demSoChuaCoDiem(), danhSach.diemTBToanLop());
 
+    if (ImGui::Button("Xuat bao cao Excel")) {
+        if (xuatBaoCao(danhSach)) {
+            thongBaoBaoCao = "Da xuat bao cao vao bao_cao_diem.csv (mo trong Excel hoac LibreOffice)";
+        } else {
+            thongBaoBaoCao = "Khong the xuat bao cao. Vui long kiem tra duong dan ghi.";
+        }
+    }
+    if (!thongBaoBaoCao.empty()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", thongBaoBaoCao.c_str());
+    }
+
     ImGui::Separator();
 
     std::vector<SinhVien> ds = danhSach.layDanhSach();
     std::string tuKhoa = bufTimKiem;
 
-    if (ImGui::BeginTable("BangDanhSach", 7,
+    if (ImGui::BeginTable("BangDanhSach", 8,
             ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
             ImVec2(0, 220))) {
 
@@ -517,6 +555,7 @@ static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV
         ImGui::TableSetupColumn("Ho ten");
         ImGui::TableSetupColumn("So mon");
         ImGui::TableSetupColumn("Diem TB");
+        ImGui::TableSetupColumn("Xep loai");
         ImGui::TableSetupColumn("Ket qua chung");
         ImGui::TableSetupColumn("Xem");
         ImGui::TableSetupColumn("Xoa");
@@ -533,6 +572,7 @@ static void veTabDanhSachSinhVien(DanhSachSinhVien& danhSach, CaySinhVien& caySV
             ImGui::TableNextColumn(); ImGui::Text("%s", sv.hoTen.c_str());
             ImGui::TableNextColumn(); ImGui::Text("%d", (int)sv.danhSachMon.size());
             ImGui::TableNextColumn(); ImGui::Text("%.2f", sv.diemTB);
+            ImGui::TableNextColumn(); ImGui::Text("%s", chuyenDiem10SangChu(sv.diemTB).c_str());
 
             ImGui::TableNextColumn();
             if (sv.danhSachMon.empty()) {
@@ -623,6 +663,8 @@ bool veKhungHinh(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
                 ImGui::TextDisabled("Chua co diem mon nao.");
             } else {
                 ImGui::Text("Diem trung binh: %.2f", my->diemTB);
+                ImGui::SameLine();
+                ImGui::Text("| Xep loai: %s", chuyenDiem10SangChu(my->diemTB).c_str());
                 ImGui::Text("Cac mon:");
                 for (const MonHoc& mon : my->danhSachMon) {
                     ImGui::BulletText("%s - GK: %.1f, CK: %.1f, TK: %.2f", mon.tenMon.c_str(), mon.diemGiuaKy, mon.diemCuoiKy, mon.diemTongKet);
