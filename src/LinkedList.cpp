@@ -1,5 +1,80 @@
 #include "LinkedList.h"
-#include <utility> // cho std::swap
+
+namespace {
+
+bool xepTruoc(const SinhVien& benTrai, const SinhVien& benPhai) {
+    if (benTrai.diemTB != benPhai.diemTB) {
+        return benTrai.diemTB > benPhai.diemTB;
+    }
+    return benTrai.maSV <= benPhai.maSV;
+}
+
+Node* hopNhatDanhSach(Node* benTrai, Node* benPhai) {
+    Node* dau = nullptr;
+    Node* duoi = nullptr;
+
+    auto ganNode = [&](Node* node) {
+        if (dau == nullptr) {
+            dau = node;
+            duoi = node;
+        } else {
+            duoi->next = node;
+            duoi = node;
+        }
+    };
+
+    while (benTrai != nullptr && benPhai != nullptr) {
+        if (xepTruoc(benTrai->data, benPhai->data)) {
+            Node* tiepTheo = benTrai->next;
+            benTrai->next = nullptr;
+            ganNode(benTrai);
+            benTrai = tiepTheo;
+        } else {
+            Node* tiepTheo = benPhai->next;
+            benPhai->next = nullptr;
+            ganNode(benPhai);
+            benPhai = tiepTheo;
+        }
+    }
+
+    Node* conLai = (benTrai != nullptr) ? benTrai : benPhai;
+    if (duoi != nullptr) {
+        duoi->next = conLai;
+        return dau;
+    }
+
+    return conLai;
+}
+
+Node* tachDanhSach(Node* dau) {
+    if (dau == nullptr || dau->next == nullptr) {
+        return nullptr;
+    }
+
+    Node* cham = dau;
+    Node* nhanh = dau->next;
+    while (nhanh != nullptr && nhanh->next != nullptr) {
+        cham = cham->next;
+        nhanh = nhanh->next->next;
+    }
+
+    Node* nuaSau = cham->next;
+    cham->next = nullptr;
+    return nuaSau;
+}
+
+Node* sapXepNhanh(Node* dau) {
+    if (dau == nullptr || dau->next == nullptr) {
+        return dau;
+    }
+
+    Node* nuaSau = tachDanhSach(dau);
+    Node* nuaTruocDaSap = sapXepNhanh(dau);
+    Node* nuaSauDaSap = sapXepNhanh(nuaSau);
+    return hopNhatDanhSach(nuaTruocDaSap, nuaSauDaSap);
+}
+
+} // namespace
 
 // ============================================================
 // Khởi tạo danh sách rỗng
@@ -42,7 +117,6 @@ void DanhSachSinhVien::themSinhVien(const SinhVien& sv) {
 bool DanhSachSinhVien::xoaSinhVien(const std::string& maSV) {
     if (head == nullptr) return false;
 
-    // Trường hợp xóa đúng node đầu
     if (head->data.maSV == maSV) {
         Node* temp = head;
         head = head->next;
@@ -51,7 +125,6 @@ bool DanhSachSinhVien::xoaSinhVien(const std::string& maSV) {
         return true;
     }
 
-    // Trường hợp xóa node ở giữa/cuối
     Node* current = head;
     while (current->next != nullptr) {
         if (current->next->data.maSV == maSV) {
@@ -64,7 +137,7 @@ bool DanhSachSinhVien::xoaSinhVien(const std::string& maSV) {
         current = current->next;
     }
 
-    return false; // không tìm thấy
+    return false;
 }
 
 // ============================================================
@@ -95,26 +168,12 @@ bool DanhSachSinhVien::suaSinhVien(const std::string& maSV, const SinhVien& svMo
 }
 
 // ============================================================
-// Sắp xếp danh sách theo điểm trung bình GIẢM DẦN.
-// Dùng Selection Sort trên linked list (đơn giản, dễ giải thích khi
-// bảo vệ đồ án). Đổi chỗ bằng cách hoán đổi NỘI DUNG (data) giữa 2
-// node thay vì hoán đổi con trỏ next -- cách này đơn giản hơn nhiều
-// cho sinh viên khi trình bày báo cáo.
+// Sort the list by average score in descending order.
+// Merge sort is the best fit for a singly linked list because it is
+// O(n log n), stable, and works directly on nodes.
 // ============================================================
 void DanhSachSinhVien::sapXepTheoDiemTB() {
-    if (head == nullptr) return;
-
-    for (Node* i = head; i->next != nullptr; i = i->next) {
-        Node* maxNode = i;
-        for (Node* j = i->next; j != nullptr; j = j->next) {
-            if (j->data.diemTB > maxNode->data.diemTB) {
-                maxNode = j;
-            }
-        }
-        if (maxNode != i) {
-            std::swap(i->data, maxNode->data);
-        }
-    }
+    head = sapXepNhanh(head);
 }
 
 // ============================================================
@@ -175,8 +234,7 @@ int DanhSachSinhVien::demSoChuaCoDiem() const {
 
 // ============================================================
 // Thống kê: điểm trung bình của toàn bộ lớp
-// (chỉ tính trên các sinh viên ĐÃ có ít nhất 1 môn, tránh bị kéo
-// thấp bởi sinh viên vừa thêm nhưng chưa kịp nhập điểm)
+// (chỉ tính trên các sinh viên đã có ít nhất 1 môn)
 // ============================================================
 float DanhSachSinhVien::diemTBToanLop() const {
     float tong = 0.0f;

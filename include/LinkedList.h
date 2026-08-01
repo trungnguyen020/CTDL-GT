@@ -41,8 +41,8 @@ public:
     // Cập nhật thông tin 1 sinh viên đã tồn tại
     bool suaSinhVien(const std::string& maSV, const SinhVien& svMoi);
 
-    // Sắp xếp danh sách theo điểm trung bình (giảm dần), dùng thuật toán
-    // sắp xếp trên linked list (ví dụ: merge sort hoặc selection sort)
+    // Sắp xếp danh sách theo điểm trung bình (giảm dần) bằng merge sort.
+    // Đây là lựa chọn tối ưu cho singly linked list vì O(n log n) và ổn định.
     void sapXepTheoDiemTB();
 
     // Trả về toàn bộ danh sách dưới dạng vector — dùng để GUI hiển thị bảng
