@@ -33,6 +33,9 @@ bool veKhungHinh(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
 // nhập thành công, false nếu người dùng đóng cửa sổ/thoát.
 bool veLogin(sqlite3* db);
 
+// Trả về true nếu người dùng vừa bấm đăng xuất trong màn hình chính.
+bool layVaXoaYeuCauDangXuat();
+
 // Giải phóng tài nguyên GUI (gọi 1 lần trước khi chương trình kết thúc)
 void giaiPhongGUI();
 

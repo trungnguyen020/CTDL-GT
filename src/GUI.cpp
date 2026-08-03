@@ -18,6 +18,13 @@ static GLFWwindow* window = nullptr;
 // Hiện tại user đăng nhập và role (teacher nếu không phải maSV)
 static std::string g_currentUser = "";
 static bool g_isTeacher = false;
+static bool g_yeuCauDangXuat = false;
+
+static void yeuCauDangXuat() {
+    g_yeuCauDangXuat = true;
+    g_currentUser.clear();
+    g_isTeacher = false;
+}
 
 static bool xuatBaoCao(const DanhSachSinhVien& danhSach, const std::string& duongDan = "bao_cao_diem.csv") {
     std::ofstream out(duongDan, std::ios::out | std::ios::trunc);
@@ -40,6 +47,12 @@ static bool xuatBaoCao(const DanhSachSinhVien& danhSach, const std::string& duon
 
     out.close();
     return true;
+}
+
+bool layVaXoaYeuCauDangXuat() {
+    bool ketQua = g_yeuCauDangXuat;
+    g_yeuCauDangXuat = false;
+    return ketQua;
 }
 
 // ============================================================
@@ -651,6 +664,19 @@ bool veKhungHinh(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
     ImGui::SetNextWindowSize(ImVec2(1000, 720), ImGuiCond_FirstUseEver);
     ImGui::Begin("Quan ly diem sinh vien");
 
+    if (ImGui::Button("Dang xuat")) {
+        yeuCauDangXuat();
+        ImGui::End();
+        ImGui::Render();
+        int display_w, display_h; glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(0.12f, 0.12f, 0.14f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glfwSwapBuffers(window);
+        return false;
+    }
+
     // Nếu user hiện tại là sinh viên, hiển thị chế độ xem điểm đơn giản
     if (!g_isTeacher) {
         SinhVien* my = caySV.timSinhVien(g_currentUser);
@@ -672,10 +698,7 @@ bool veKhungHinh(DanhSachSinhVien& danhSach, CaySinhVien& caySV, sqlite3* db,
             }
         }
         ImGui::Separator();
-        if (ImGui::Button("Thoat")) {
-            // Đóng cửa sổ
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
-        }
+        ImGui::TextDisabled("Bam 'Dang xuat' o ben tren de quay lai man hinh dang nhap.");
         ImGui::End();
         // Render và swap sau hàm gọi chính
         ImGui::Render();

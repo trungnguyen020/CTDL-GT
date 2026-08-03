@@ -34,21 +34,27 @@ int main() {
         return -1;
     }
 
-    // 3b. Hiển thị màn hình đăng nhập trước khi vào giao diện chính
-    if (!veLogin(db)) {
-        // Người dùng đã đóng/thoát trong màn hình đăng nhập
-        giaiPhongGUI();
-        dongKetNoiDB(db);
-        return 0;
-    }
+    while (true) {
+        // 3b. Hiển thị màn hình đăng nhập trước khi vào giao diện chính
+        if (!veLogin(db)) {
+            // Người dùng đã đóng/thoát trong màn hình đăng nhập
+            break;
+        }
 
-    // 4. Vòng lặp chính: vẽ giao diện liên tục cho tới khi người dùng thoát
-    bool dangChay = true;
-    while (dangChay) {
-        dangChay = veKhungHinh(danhSach, caySV, db, danhSachMonChuan);
-        // Việc lưu/xóa xuống SQLite giờ đã được gọi trực tiếp bên trong
-        // veKhungHinh (xem GUI.cpp) mỗi khi người dùng thêm/xóa sinh viên
-        // hoặc môn học.
+        // 4. Vòng lặp chính: vẽ giao diện liên tục cho tới khi người dùng thoát
+        bool dangChay = true;
+        while (dangChay) {
+            dangChay = veKhungHinh(danhSach, caySV, db, danhSachMonChuan);
+
+            // Việc lưu/xóa xuống SQLite giờ đã được gọi trực tiếp bên trong
+            // veKhungHinh (xem GUI.cpp) mỗi khi người dùng thêm/xóa sinh viên
+            // hoặc môn học.
+        }
+
+        if (layVaXoaYeuCauDangXuat()) {
+            continue;
+        }
+        break;
     }
 
     // 5. Dọn dẹp tài nguyên
