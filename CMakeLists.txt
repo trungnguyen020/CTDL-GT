@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(FetchContent)
 
 # ------------------------------------------------------------
-# 1. Tự động tải GLFW (thư viện tạo cửa sổ) từ GitHub
+# 
 # ------------------------------------------------------------
 FetchContent_Declare(
     glfw
