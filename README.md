@@ -55,4 +55,4 @@ Các lần build sau sẽ nhanh hơn nhiều vì thư viện đã có sẵn tron
 3. Nhấn `Ctrl+Shift+P` → gõ "CMake: Configure" → chọn kit (compiler)
    đã cài ở Bước 1.
 4. Nhấn nút **Build** (thanh trạng thái dưới cùng) hoặc `F7`.
-5. Nhấn nút **Run** (biểu tượng tam giác) để chạy thử.
+
